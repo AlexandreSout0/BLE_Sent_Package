@@ -53,8 +53,6 @@ class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os servi�
 };
 
 
-
-
 void setup() {
 
   Serial.begin(9600);
@@ -99,23 +97,55 @@ struct obc_frame{
 }frame = {1200,1,0,0,0};
 
 
+String Gerador_de_Checksum(String package)
+{
+  String checksum = "";    
+  int DV = 0;
+  int tamanho = package.length();            
+  for (int i = 0; i < tamanho; i++)
+  {
+    DV ^= package[i];
+  }
+        
+  String hexValue = String(DV, HEX) + "\0";
+          
+  if (hexValue.length() == 1)
+    checksum = "0" + hexValue;
+  if (hexValue.length() == 2)
+    checksum = hexValue;  
+  if (hexValue.length() == 3)
+    checksum = "0" + hexValue[2];
+  if (hexValue.length() == 4)
+    checksum = (hexValue[2] + hexValue[4]);
+  if (hexValue == "0")
+    checksum = "00"; 
+                         
+  return checksum;  
+}
+
 void sense()
 {
-
+  String package;
+  package = "$OBC,";
   frame.rpm = frame.rpm + 4;
-
+   
+   //$OBC,600,0,0,0,0,checksum\r\n
 
   if (isnan(frame.rpm))               // verifica se contém um número dentro de RPM 
   {                                  // se não retorna
     Serial.println("RPM reading Failed!");
     return;
   }
+  //Serial.println("RPM = %d | Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d", frame.rpm,frame.digital1,frame.digital2,frame.digital3,frame.digital4 );
+  package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + ",");
+  String temp_checksum = Gerador_de_Checksum(package);
+  package = (package + temp_checksum + "\r\n");
 
-  Serial.printf("RPM = %d | Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d", frame.rpm,frame.digital1,frame.digital2,frame.digital3,frame.digital4 );
-  
+	char arr[] = {'a'}; 
+
   if (lastRPM != frame.rpm)
   {
-      pacote -> setValue(frame.rpm);
+      pacote -> setValue(package.c_str());
       pacote -> notify(); //notifica que houve alterações no pacote
       lastRPM = frame.rpm;
   }
