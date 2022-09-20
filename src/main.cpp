@@ -22,6 +22,7 @@
 
 #define READ_INTERVAL 2000
 #define LEDPIN 2
+#define TIMER_INTERVAL 1000000 // 1 SEGUNDO
 
 #define SERVICE_UUID "0716bf69-27fa-44bd-b636-4ab49725c6b0"
 #define PACOTE_UUID "0716bf69-27fa-44bd-b636-4ab49725c6b1"
@@ -34,6 +35,7 @@ int devicesConnected = 0; //Contador de usuários conectados
 unsigned int blinkMillis = 0;
 unsigned int readMillis = 0;
 
+int flag_retorno = 0;
 
 volatile int interruptCounter;
 int totalInterruptCounter;
@@ -44,20 +46,31 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 BLEServer *server = nullptr; //Ponteiro para uma variável tipo BLEserver
 BLECharacteristic *pacote = nullptr; //Ponteiro para caracteristicas do serviço do periferico
 BLECharacteristic *pacote_rx = nullptr; //Ponteiro para caracteristicas do serviço do periferico
+BLEService *service = nullptr; //Ponteiro para variável tipo BLEService
 
 //callback  para envendos das características
 class CharacteristicCallbacks: public BLECharacteristicCallbacks 
 {
+    String temp;
+
     void onWrite(BLECharacteristic *pacote_rx) 
     {
       //retorna ponteiro para o registrador contendo o valor atual da caracteristica
-      std::string rxValue = pacote_rx->getValue(); 
+      std::string rxValue = pacote_rx->getValue().c_str(); 
       //verifica se existe dados (tamanho maior que zero)
       if (rxValue.length() > 0) 
       {
-        Serial.print(rxValue.c_str());
+        //Serial.print(rxValue.c_str());
+        temp = temp + rxValue.c_str();
       }
+      Serial.println(temp);
+      if(temp == "$POK")
+      {
+        flag_retorno = 1;
+      }
+
   }
+
 };
 
 /*
@@ -83,6 +96,10 @@ class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os servi�
   {
     devicesConnected--; // quando um usuario se desconecta subtrai um na variavel
     Serial.println("Device Disconnected");
+    flag_retorno = 0;
+    service -> stop();
+    delay(1000);
+    service -> start();
   }
 };
 
@@ -97,7 +114,7 @@ void setup()
   // Rotina de interrupção
   timer = timerBegin(0, 80, true);
   timerAttachInterrupt(timer, &onTimer, true);
-  timerAlarmWrite(timer, 1000000, true);
+  timerAlarmWrite(timer,TIMER_INTERVAL, true);
   timerAlarmEnable(timer);
 
 
@@ -111,7 +128,6 @@ void setup()
   server -> setCallbacks(new ServerCallbacks()); // cria uma instancia do serviço de callback
 
   //======= Serviços do Periferico BLE ======= //
-  BLEService *service = nullptr; //Ponteiro para variável tipo BLEService
   service = server -> createService(SERVICE_UUID); //crio um serviço com o UUID e guardo seu endereço no ponteiro
   pacote = service -> createCharacteristic(  //Configurar Características
     PACOTE_UUID,
@@ -190,7 +206,7 @@ void sense()
   package = "$ALX,";
   frame.rpm = frame.rpm + 4;
    
-   //$OBC,600,0,0,0,0,0,checksum\r\n
+   //$ALX,600,0,0,0,0,0,checksum\r\n
 
   if (isnan(frame.rpm))               // verifica se contém um número dentro de RPM 
   {                                  // se não retorna
@@ -202,7 +218,7 @@ void sense()
   String temp_checksum = Gerador_de_Checksum(package);
   package = (package + temp_checksum + "\r\n");
 
-  if (lastRPM != frame.rpm)
+  if (lastRPM != frame.rpm && flag_retorno == 1)
   {
       pacote -> setValue(package.c_str());
       pacote -> notify(); //notifica que houve alterações no pacote
