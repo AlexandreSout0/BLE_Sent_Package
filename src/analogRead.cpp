@@ -8,6 +8,7 @@ pins{pin1,pin2,pin3,pin4,pulse1,rpm}
   for(short i=0;i<6; i+=1)
   {
     pinMode(pins[i], INPUT_PULLUP);
+    
   }
 
 }
@@ -18,8 +19,6 @@ unsigned analog_read::analog_digital(int digital1,int digital2,int digital3,int 
     int  flag2=0;
     int  flag3=0;
     int  flag4=0;
-
-    
 
     flag1 = digitalRead(pins[1]);
     flag2 = digitalRead(pins[2]);
@@ -40,7 +39,6 @@ unsigned analog_read::analog_rpm(int rpm)
     flag6 = 1200;
 
     return flag6;
-
 }
 
 unsigned analog_read::analog_pulse(int pulse)
