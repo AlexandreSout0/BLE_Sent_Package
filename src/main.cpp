@@ -28,12 +28,12 @@
 #define PACOTE_UUID  "0716bf69-27fa-44bd-b636-4ab49725c6b1"
 #define RX_UUID      "4ac8a682-9736-4e5d-932b-e9b31405049c"
 
-#define PIN_DIGITAL_1 2
-#define PIN_DIGITAL_2 3
-#define PIN_DIGITAL_3 4
-#define PIN_DIGITAL_4 5
-#define PIN_PULSE_1  18
-#define PIN_RPM      19
+#define PIN_DIGITAL_1  2
+#define PIN_DIGITAL_2 15
+#define PIN_DIGITAL_3  4
+#define PIN_DIGITAL_4  5
+#define PIN_PULSE_1   18
+#define PIN_RPM       19
 
 
 
@@ -51,7 +51,7 @@ int totalInterruptCounter;
 
 
 #include "analogRead.hpp"
-analog_read meuspinos(18,19,15,4,5,3);
+analog_read meuspinos(PIN_DIGITAL_1,PIN_DIGITAL_2,15,4,5,3);
 
 
 
@@ -257,10 +257,11 @@ void loop()
     //Serial.print("An interrupt as occurred. Total number: ");
     //Serial.println(totalInterruptCounter);
 
-     int teste = meuspinos.analog_rpm(18);
-      Serial.println(teste);
-
-
+     int teste = meuspinos.analog_digital(1);
+     Serial.print(teste);
+     int teste2 = meuspinos.analog_digital(1);
+     Serial.print(teste2);
+    Serial.println("");
   }
 
   if (readMillis == 0 || (millis() - readMillis) >= READ_INTERVAL)

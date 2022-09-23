@@ -7,44 +7,62 @@ pins{pin1,pin2,pin3,pin4,pulse1,rpm}
 {
   for(short i=0;i<6; i+=1)
   {
-    pinMode(pins[i], INPUT_PULLUP);
+    pinMode(pins[i], INPUT);
     
   }
 
 }
-
-unsigned analog_read::analog_digital(int digital1,int digital2,int digital3,int digital4)
+ 
+unsigned analog_read::analog_digital(int pin1)
 {
-    int  flag1=0;
-    int  flag2=0;
-    int  flag3=0;
-    int  flag4=0;
+    int DigitalVal = 0;
+    DigitalVal = digitalRead(pins[pin1]);
 
-    flag1 = digitalRead(pins[1]);
-    flag2 = digitalRead(pins[2]);
-    flag3 = digitalRead(pins[3]);
-    flag4 = digitalRead(pins[4]);
-    flag1 = 1;
-    flag2 = 1;
-    flag3 = 1;
-    flag4 = 1;
-
-    return flag1;
+    return DigitalVal;
 }
 
 unsigned analog_read::analog_rpm(int rpm)
 { 
-    int  flag6=0;
-    flag6 = digitalRead(pins[6]);
-    flag6 = 1200;
+      /*     
+                          high
+              |--|  |--|  |--|  |--|  |--|
+            __|  |__|  |__|  |__|  |__|  |____  signal PWM of integrad alternador
+                  low
+      -----------------------------------------------> time
+      */
+      float totalTime = 0;
+      int highPulseTime = 0;
+      int lowPulseTime = 0;
+      int frequency = 0;
 
-    return flag6;
+      highPulseTime = pulseIn(rpm, HIGH); // Time the signal is high
+      lowPulseTime = pulseIn(rpm, LOW); // Time the signal is low
+    
+      totalTime = highPulseTime+lowPulseTime;
+
+      frequency = 1000000/totalTime;    //obter frequência com o tempo está em microssegundos
+
+      return frequency;
 }
 
 unsigned analog_read::analog_pulse(int pulse)
 {
-    int  flag5=0;
-    flag5 = digitalRead(pins[5]);
-    flag5 = 500;
-    return flag5;
+     /*     
+                          high
+              |--|  |--|  |--|  |--|  |--|
+            __|  |__|  |__|  |__|  |__|  |____  signal PWM pulse
+                  low
+      -----------------------------------------------> time
+      */
+      float totalTime = 0;
+      int highPulseTime = 0;
+      int numPulse = 0;
+
+      highPulseTime = pulseIn(pulse, HIGH); // Time the signal is high
+    
+      totalTime = highPulseTime;
+
+      numPulse = totalTime/1000000;    //obter frequência com o tempo está em microssegundos
+
+      return numPulse;
 }
