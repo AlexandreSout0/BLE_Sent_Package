@@ -40,7 +40,7 @@
 
 
 
-int lastRPM = -999;
+String lastPackage = "";
 int devicesConnected = 0; //Contador de usuários conectados
 
 unsigned int blinkMillis = 0;
@@ -90,11 +90,12 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
       std::string rxValue = pacote_rx->getValue().c_str(); 
       //verifica se existe dados (tamanho maior que zero)
       buffer += rxValue.c_str();
-      if (rxValue == "$")
+      if (rxValue == "!")
       {
           if(buffer == "$POK!")
           {
-            printteste(buffer.c_str());
+            //printteste(buffer.c_str());
+            flag_retorno = 1;
             buffer = "";
           }
           else
@@ -215,28 +216,31 @@ String Gerador_de_Checksum(String package)
 void Sent_Package()
 {
   String package;
+
+   frame.digital1  =  pins.analog_digital(PIN_DIGITAL_1);
+   frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
+   frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
+   frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
+   frame.rpm      =  pins.analog_rpm(PIN_RPM);
+   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+
   package = "$ALX,";
-  frame.rpm = frame.rpm + 4;
    //$ALX,600,0,0,0,0,0,checksum\r\n
-  if (isnan(frame.rpm))               // verifica se contém um número dentro de RPM 
-  {                                  // se não retorna
-    Serial.println("RPM reading Failed!");
-    return;
-  }
 
-  Serial.printf("RPM = %d | Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d \n", frame.rpm,frame.digital1,frame.digital2,frame.digital3,frame.digital4);
+  //Serial.printf("Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d | RPM: %d | Pulse: %d \n", frame.digital1,frame.digital2,frame.digital3,frame.digital4,frame.rpm,frame.pulse1);
 
-  package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + "," + frame.digital4 + "," + frame.pulse1 + ",");
+  package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + "," + frame.pulse1 + ",");
   
   String temp_checksum = Gerador_de_Checksum(package);
   
   package = (package + temp_checksum + "\r\n");
+  Serial.print(package);
 
-  if (lastRPM != frame.rpm && flag_retorno == 1)
+  if (package != lastPackage)
   {
       pacote -> setValue(package.c_str());
       pacote -> notify(); //notifica que houve alterações no pacote
-      lastRPM = frame.rpm;
+      lastPackage = package;
   }
 
 }
@@ -250,14 +254,12 @@ void loop()
     portENTER_CRITICAL(&timerMux);
     interruptCounter--;
     portEXIT_CRITICAL(&timerMux);
+    if (flag_retorno == 1)
+    {
+      Sent_Package();
+    }
 
-   frame.digital1 =  pins.analog_digital(PIN_DIGITAL_1);
-   frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
-   frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
-   frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
-   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
-   frame.rpm      =  pins.analog_rpm(PIN_RPM);
-
+   /*
    Serial.print(frame.digital1);
    Serial.print(" ");
    Serial.print(frame.digital2);
@@ -270,7 +272,8 @@ void loop()
    Serial.print(" ");
    Serial.print(frame.pulse1);
    Serial.println("");
-   //
+   */
+
    totalInterruptCounter++;
 
   }
