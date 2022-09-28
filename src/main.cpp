@@ -6,8 +6,8 @@
 |  |  |  | |  | |  '--'  ||  |\  \ .|  `--'  |  /  .  \  |  | |  '--'  ||  `--'  | 
 |__|  |__| |__| |_______/ | _| `._|  \______/  /__/ \__\ |__| |_______/  \______/  
                                                                     Alexandre Souto 
-  Bluetooth Low Energy
-   
+   Bluetooth Low Energy
+ 
    Compilador: Visual Studio 2022
 
    Autor: Alexandre Souto
@@ -19,6 +19,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include "analogRead.hpp"
 
 #define READ_INTERVAL     2000
 #define LEDPIN               2
@@ -28,12 +29,13 @@
 #define PACOTE_UUID  "0716bf69-27fa-44bd-b636-4ab49725c6b1"
 #define RX_UUID      "4ac8a682-9736-4e5d-932b-e9b31405049c"
 
-#define PIN_DIGITAL_1  2
-#define PIN_DIGITAL_2 15
-#define PIN_DIGITAL_3  4
-#define PIN_DIGITAL_4  5
-#define PIN_PULSE_1   18
-#define PIN_RPM       19
+#define PIN_DIGITAL_1  5
+#define PIN_DIGITAL_2 18
+#define PIN_DIGITAL_3 19
+#define PIN_DIGITAL_4 21
+#define PIN_RPM       34
+#define PIN_PULSE_1   35
+
 
 
 
@@ -49,10 +51,18 @@ int flag_retorno = 0;
 volatile int interruptCounter;
 int totalInterruptCounter;
 
+struct obc_frame 
+{
+  unsigned int rpm ;
+  unsigned int digital1;
+  unsigned int digital2;
+  unsigned int digital3;
+  unsigned int digital4;
+  unsigned int pulse1;
+}frame = {0,0,0,0,0,0};
 
-#include "analogRead.hpp"
-analog_read meuspinos(PIN_DIGITAL_1,PIN_DIGITAL_2,15,4,5,3);
 
+analog_read pins(PIN_DIGITAL_1,PIN_DIGITAL_2,PIN_DIGITAL_3,PIN_DIGITAL_4,PIN_RPM,PIN_PULSE_1);
 
 
 hw_timer_t * timer = NULL;
@@ -63,39 +73,38 @@ BLECharacteristic *pacote = nullptr; //Ponteiro para caracteristicas do serviço
 BLECharacteristic *pacote_rx = nullptr; //Ponteiro para caracteristicas do serviço do periferico
 BLEService *service = nullptr; //Ponteiro para variável tipo BLEService
 
+
+void printteste(std::string teste)
+{
+  Serial.println(teste.c_str());
+
+}
 //callback  para envendos das características
 class CharacteristicCallbacks: public BLECharacteristicCallbacks 
 {
-    String temp;
+    std::string buffer = "";
 
     void onWrite(BLECharacteristic *pacote_rx) 
     {
       //retorna ponteiro para o registrador contendo o valor atual da caracteristica
       std::string rxValue = pacote_rx->getValue().c_str(); 
       //verifica se existe dados (tamanho maior que zero)
-      if (rxValue.length() > 0) 
+      buffer += rxValue.c_str();
+      if (rxValue == "$")
       {
-        //Serial.print(rxValue.c_str());
-        temp = temp + rxValue.c_str();
+          if(buffer == "$POK!")
+          {
+            printteste(buffer.c_str());
+            buffer = "";
+          }
+          else
+          {
+            buffer = "";
+          }
       }
-      Serial.println(temp);
-      if(temp == "$POK")
-      {
-        flag_retorno = 1;
-      }
-
   }
 
 };
-
-/*
-        Serial.print("Received Value: ");
-
-        for (int i = 0; i < rxValue.length(); i++) 
-        {
-          Serial.print(rxValue[i]);
-        }
-*/
 
 
 class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os serviços de callback BLE
@@ -122,9 +131,9 @@ void IRAM_ATTR onTimer();
 void sense();
 String Gerador_de_Checksum(String package);
 
-
 void setup() 
 {
+
   Serial.begin(9600);
   // Rotina de interrupção
   timer = timerBegin(0, 80, true);
@@ -169,23 +178,12 @@ void setup()
 
 }
 
-struct obc_frame 
-{
-  unsigned int rpm ;
-  unsigned int digital1;
-  unsigned int digital2;
-  unsigned int digital3;
-  unsigned int digital4;
-  unsigned int pulse1;
-}frame = {1200,1,0,0,0,15};
-
-
 void IRAM_ATTR onTimer() 
 {
   portENTER_CRITICAL_ISR(&timerMux);
   interruptCounter++;
   portEXIT_CRITICAL_ISR(&timerMux);
- 
+
 }
 
 String Gerador_de_Checksum(String package)
@@ -197,7 +195,7 @@ String Gerador_de_Checksum(String package)
   {
     DV ^= package[i];   // bitwise XOR
   }
-  
+
   String hexValue = String(DV, HEX) + "\0"; // conver DV para hexadecimal
   
   if (hexValue.length() == 1)
@@ -212,25 +210,26 @@ String Gerador_de_Checksum(String package)
     checksum = "00"; 
                          
   return checksum;  
-
 }
 
-void sense()
+void Sent_Package()
 {
   String package;
   package = "$ALX,";
   frame.rpm = frame.rpm + 4;
-   
    //$ALX,600,0,0,0,0,0,checksum\r\n
-
   if (isnan(frame.rpm))               // verifica se contém um número dentro de RPM 
   {                                  // se não retorna
     Serial.println("RPM reading Failed!");
     return;
   }
-  //Serial.println("RPM = %d | Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d", frame.rpm,frame.digital1,frame.digital2,frame.digital3,frame.digital4 );
+
+  Serial.printf("RPM = %d | Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d \n", frame.rpm,frame.digital1,frame.digital2,frame.digital3,frame.digital4);
+
   package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + "," + frame.digital4 + "," + frame.pulse1 + ",");
+  
   String temp_checksum = Gerador_de_Checksum(package);
+  
   package = (package + temp_checksum + "\r\n");
 
   if (lastRPM != frame.rpm && flag_retorno == 1)
@@ -251,22 +250,33 @@ void loop()
     portENTER_CRITICAL(&timerMux);
     interruptCounter--;
     portEXIT_CRITICAL(&timerMux);
- 
-    totalInterruptCounter++;
- 
-    //Serial.print("An interrupt as occurred. Total number: ");
-    //Serial.println(totalInterruptCounter);
 
-     int teste = meuspinos.analog_digital(1);
-     Serial.print(teste);
-     int teste2 = meuspinos.analog_digital(1);
-     Serial.print(teste2);
-    Serial.println("");
+   frame.digital1 =  pins.analog_digital(PIN_DIGITAL_1);
+   frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
+   frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
+   frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
+   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+   frame.rpm      =  pins.analog_rpm(PIN_RPM);
+
+   Serial.print(frame.digital1);
+   Serial.print(" ");
+   Serial.print(frame.digital2);
+   Serial.print(" ");
+   Serial.print(frame.digital3);
+   Serial.print(" ");
+   Serial.print(frame.digital4);
+   Serial.print(" ");
+   Serial.print(frame.rpm);
+   Serial.print(" ");
+   Serial.print(frame.pulse1);
+   Serial.println("");
+   //
+   totalInterruptCounter++;
+
   }
 
   if (readMillis == 0 || (millis() - readMillis) >= READ_INTERVAL)
   {
-    sense();
     readMillis = millis();
   }
 
