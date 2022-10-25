@@ -74,7 +74,7 @@ unsigned analog_read::analog_pulse(int pulse)
       int   numPulse      = 0;
 
       highPulseTime = pulseIn(pulse, HIGH); // Time the signal is high
-      lowPulseTime =  pulseIn(pulse, HIGH); // Time the signal is low
+      lowPulseTime =  pulseIn(pulse, LOW); // Time the signal is low
 
       totalTime = highPulseTime + lowPulseTime;
 

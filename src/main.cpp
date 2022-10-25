@@ -38,9 +38,9 @@
 
 
 
-
-
 String lastPackage = "";
+String password = "$POK";
+
 int devicesConnected = 0; //Contador de usuários conectados
 
 unsigned int blinkMillis = 0;
@@ -59,7 +59,7 @@ struct obc_frame
   unsigned int digital3;
   unsigned int digital4;
   unsigned int pulse1;
-}frame = {0,0,0,0,0,0};
+}frame = {1,0,0,0,0,0};
 
 
 analog_read pins(PIN_DIGITAL_1,PIN_DIGITAL_2,PIN_DIGITAL_3,PIN_DIGITAL_4,PIN_RPM,PIN_PULSE_1);
@@ -79,6 +79,14 @@ void printteste(std::string teste)
   Serial.println(teste.c_str());
 
 }
+
+void testeReset()
+{
+  Serial.println("Restarting ...");
+  delay(2000);
+  ESP.restart();
+}
+
 //callback  para envendos das características
 class CharacteristicCallbacks: public BLECharacteristicCallbacks 
 {
@@ -87,21 +95,30 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
     void onWrite(BLECharacteristic *pacote_rx) 
     {
       //retorna ponteiro para o registrador contendo o valor atual da caracteristica
-      std::string rxValue = pacote_rx->getValue().c_str(); 
+      std::string rxValue = pacote_rx->getValue(); 
       //verifica se existe dados (tamanho maior que zero)
       buffer += rxValue.c_str();
-      if (rxValue == "!")
+      //Serial.print(rxValue.c_str());
+      
+      std::string rxValueCheck = "!";
+      rxValueCheck.c_str();
+      
+      if (rxValue == rxValueCheck)
       {
-          if(buffer == "$POK!")
-          {
-            //printteste(buffer.c_str());
-            flag_retorno = 1;
-            buffer = "";
-          }
-          else
-          {
-            buffer = "";
-          }
+       // Serial.print("passou aqui");
+      }
+
+      printteste(buffer.c_str());
+
+      if(buffer == "$POK!")
+      {
+        Serial.print("passou aqui");
+        flag_retorno = 1;
+        buffer = "";
+      }
+      else
+      {
+        buffer = "";
       }
   }
 
@@ -122,9 +139,8 @@ class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os servi�
     devicesConnected--; // quando um usuario se desconecta subtrai um na variavel
     Serial.println("Device Disconnected");
     flag_retorno = 0;
+    testeReset();
     service -> stop();
-    delay(1000);
-    service -> start();
   }
 };
 
@@ -217,13 +233,22 @@ void Sent_Package()
 {
   String package;
 
-   frame.digital1  =  pins.analog_digital(PIN_DIGITAL_1);
+   frame.digital1 =  pins.analog_digital(PIN_DIGITAL_1);
    frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
    frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
    frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
-   frame.rpm      =  pins.analog_rpm(PIN_RPM);
+   frame.rpm      = random(1000);// pins.analog_rpm(PIN_RPM);
    frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
 
+    /*
+   frame.digital1 =  random(2);
+   frame.digital2 =  random(2);
+   frame.digital3 =  random(2);
+   frame.digital4 =  random(2);
+   frame.rpm      =  random(1000);
+   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+    */
+ 
   package = "$ALX,";
    //$ALX,600,0,0,0,0,0,checksum\r\n
 
@@ -254,25 +279,11 @@ void loop()
     portENTER_CRITICAL(&timerMux);
     interruptCounter--;
     portEXIT_CRITICAL(&timerMux);
-    if (flag_retorno == 1)
+
+    if (flag_retorno == 1) //flag_retorno == 1
     {
       Sent_Package();
     }
-
-   /*
-   Serial.print(frame.digital1);
-   Serial.print(" ");
-   Serial.print(frame.digital2);
-   Serial.print(" ");
-   Serial.print(frame.digital3);
-   Serial.print(" ");
-   Serial.print(frame.digital4);
-   Serial.print(" ");
-   Serial.print(frame.rpm);
-   Serial.print(" ");
-   Serial.print(frame.pulse1);
-   Serial.println("");
-   */
 
    totalInterruptCounter++;
 
@@ -285,7 +296,7 @@ void loop()
 
   if (!devicesConnected)
   {
-    if(blinkMillis == 0 || (millis() - blinkMillis) >= 500)
+    if(blinkMillis == 0 || (millis() - blinkMillis) >= 1000)
     {
       digitalWrite(LEDPIN, !digitalRead(LEDPIN));
       blinkMillis = millis();
