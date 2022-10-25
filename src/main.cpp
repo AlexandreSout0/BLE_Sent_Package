@@ -15,6 +15,7 @@
 */
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include "analogRead.hpp"
 
 #define READ_INTERVAL     2000
