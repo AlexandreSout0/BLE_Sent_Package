@@ -14,6 +14,187 @@
    Data:  Setember 2022 
 */
 
+
+
+
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <ESPmDNS.h>
+#include <WiFiClient.h>
+
+const char* ssid     = "uPesy_AP";
+const char* password = "1020304050";
+
+
+
+// TCP server at port 80 will respond to HTTP requests
+WiFiServer server(80);
+String lastPackage = "";
+String chave = "$POK";
+
+String Gerador_de_Checksum(String package);
+void Sent_Package();
+
+
+void setup()
+{
+    Serial.begin(9600);
+    Serial.println("\n[*] Creating AP");
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(ssid, password);
+    Serial.print("[+] AP Created with IP Gateway ");
+    Serial.println(WiFi.softAPIP());
+
+
+    // Set up mDNS responder:
+    // - first argument is the domain name, in this example
+    //   the fully-qualified domain name is "esp32.local"
+    // - second argument is the IP address to advertise
+    //   we send our IP address on the WiFi network
+    if (!MDNS.begin("esp32")) {
+        Serial.println("Error setting up MDNS responder!");
+        while(1) {
+            delay(1000);
+        }
+    }
+    Serial.println("mDNS responder started");
+
+    // Start TCP (HTTP) server
+    server.begin();
+    Serial.println("TCP server started");
+
+    // Add service to MDNS-SD
+    MDNS.addService("http", "tcp", 80);
+}
+
+
+void loop(void)
+{
+  
+    // Check if a client has connected
+    WiFiClient client = server.available();
+    if (!client) {
+        return;
+    }
+    Serial.println("");
+    Serial.println("New client");
+
+    // Wait for data from client to become available
+    while(client.connected() && !client.available()){
+        delay(1);
+    }
+
+    // Read the first line of HTTP request
+    String req = client.readStringUntil('\r');
+
+    // First line of HTTP request looks like "GET /path HTTP/1.1"
+    // Retrieve the "/path" part by finding the spaces
+    int addr_start = req.indexOf(' ');
+    int addr_end = req.indexOf(' ', addr_start + 1);
+    if (addr_start == -1 || addr_end == -1) {
+        Serial.print("Invalid request: ");
+        Serial.println(req);
+        return;
+    }
+    req = req.substring(addr_start + 1, addr_end);
+    Serial.print("Request: ");
+    Serial.println(req);
+
+    String s;
+    if (req == "/")
+    {
+        IPAddress ip = WiFi.localIP();
+        String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
+        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>$ALX,600,0,0,0,0,0,5B\r\n ";
+        //s += ipStr;
+        s += "</html>\r\n\r\n";
+        //Serial.println("Sending 200");
+    }
+    else
+    {
+        s = "HTTP/1.1 404 Not Found\r\n\r\n";
+        Serial.println("Sending 404");
+    }
+    client.print(s);
+
+    client.stop();
+    Serial.println("Done with client");
+}
+
+
+struct obc_frame 
+{
+  unsigned int rpm ;
+  unsigned int digital1;
+  unsigned int digital2;
+  unsigned int digital3;
+  unsigned int digital4;
+  unsigned int pulse1;
+}frame = {1,0,0,0,0,0};
+
+void Sent_Package()
+{
+  String package;
+    
+  frame.digital1 =  random(2);
+  frame.digital2 =  random(2);
+  frame.digital3 =  random(2);
+  frame.digital4 =  random(2);
+  frame.rpm      =  random(1000);
+  frame.pulse1   =  random(100);
+  
+ 
+  package = "$ALX,";
+   //$ALX,600,0,0,0,0,0,checksum\r\n
+
+  //Serial.printf("Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d | RPM: %d | Pulse: %d \n", frame.digital1,frame.digital2,frame.digital3,frame.digital4,frame.rpm,frame.pulse1);
+
+  package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + "," + frame.pulse1 + ",");
+  
+  String temp_checksum = Gerador_de_Checksum(package);
+  
+  package = (package + temp_checksum + "\r\n");
+  Serial.print(package);
+
+  if (package != lastPackage)
+  {
+      //pacote -> setValue(package.c_str());
+      //pacote -> notify(); //notifica que houve alterações no pacote
+      lastPackage = package;
+  }
+
+}
+
+String Gerador_de_Checksum(String package)
+{
+  String checksum = "";
+  int DV = 0;
+  int tamanho = package.length();            
+  for (int i = 0; i < tamanho; i++)
+  {
+    DV ^= package[i];   // bitwise XOR
+  }
+
+  String hexValue = String(DV, HEX) + "\0"; // conver DV para hexadecimal
+  
+  if (hexValue.length() == 1)
+    checksum = "0" + hexValue;
+  if (hexValue.length() == 2)
+    checksum = hexValue;  
+  if (hexValue.length() == 3)
+    checksum = "0" + hexValue[2];
+  if (hexValue.length() == 4)
+    checksum = (hexValue[2] + hexValue[4]);
+  if (hexValue == "0")
+    checksum = "00"; 
+                         
+  return checksum;  
+}
+
+
+/*
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include "analogRead.hpp"
@@ -146,14 +327,14 @@ void Sent_Package()
    frame.rpm      = random(1000);// pins.analog_rpm(PIN_RPM);
    frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
 
-    /*
-   frame.digital1 =  random(2);
-   frame.digital2 =  random(2);
-   frame.digital3 =  random(2);
-   frame.digital4 =  random(2);
-   frame.rpm      =  random(1000);
-   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
-    */
+    
+  // frame.digital1 =  random(2);
+  // frame.digital2 =  random(2);
+  // frame.digital3 =  random(2);
+  // frame.digital4 =  random(2);
+  // frame.rpm      =  random(1000);
+  //  frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+  
  
   package = "$ALX,";
    //$ALX,600,0,0,0,0,0,checksum\r\n
@@ -215,3 +396,9 @@ void loop()
 
 
 }
+
+*/
+
+
+
+
