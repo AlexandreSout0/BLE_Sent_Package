@@ -15,15 +15,12 @@
 */
 
 
-
-
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPmDNS.h>
 #include <WiFiClient.h>
 
-const char* ssid     = "uPesy_AP";
+const char* ssid     = "4le3x_AP";
 const char* password = "1020304050";
 
 
@@ -31,14 +28,15 @@ const char* password = "1020304050";
 // TCP server at port 80 will respond to HTTP requests
 WiFiServer server(80);
 String lastPackage = "";
+
 String chave = "$POK";
 
 String Gerador_de_Checksum(String package);
-void Sent_Package();
+String Sent_Package();
 
 
 void setup()
-{
+{   
     Serial.begin(9600);
     Serial.println("\n[*] Creating AP");
     WiFi.mode(WIFI_AP);
@@ -71,12 +69,14 @@ void setup()
 
 void loop(void)
 {
-  
+
+
     // Check if a client has connected
     WiFiClient client = server.available();
     if (!client) {
         return;
     }
+
     Serial.println("");
     Serial.println("New client");
 
@@ -97,6 +97,7 @@ void loop(void)
         Serial.println(req);
         return;
     }
+
     req = req.substring(addr_start + 1, addr_end);
     Serial.print("Request: ");
     Serial.println(req);
@@ -106,11 +107,18 @@ void loop(void)
     {
         IPAddress ip = WiFi.localIP();
         String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n<html>$ALX,600,0,0,0,0,0,5B\r\n ";
+
+        //recebe o package
+        //String coisa = "$ALX,600,0,0,0,0,0,5B";
+        String Package;
+        Package = Sent_Package();
+
+        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n" + Package + "\r\n";
         //s += ipStr;
         s += "</html>\r\n\r\n";
         //Serial.println("Sending 200");
     }
+
     else
     {
         s = "HTTP/1.1 404 Not Found\r\n\r\n";
@@ -120,6 +128,7 @@ void loop(void)
 
     client.stop();
     Serial.println("Done with client");
+
 }
 
 
@@ -133,10 +142,12 @@ struct obc_frame
   unsigned int pulse1;
 }frame = {1,0,0,0,0,0};
 
-void Sent_Package()
+
+String Sent_Package()
 {
+
   String package;
-    
+
   frame.digital1 =  random(2);
   frame.digital2 =  random(2);
   frame.digital3 =  random(2);
@@ -146,8 +157,7 @@ void Sent_Package()
   
  
   package = "$ALX,";
-   //$ALX,600,0,0,0,0,0,checksum\r\n
-
+  //$ALX,600,0,0,0,0,0,checksum\r\n
   //Serial.printf("Digital 1: %d | Digital 2: %d | Digital 3: %d  | Digital 4: %d | RPM: %d | Pulse: %d \n", frame.digital1,frame.digital2,frame.digital3,frame.digital4,frame.rpm,frame.pulse1);
 
   package = (package + frame.rpm + "," + frame.digital1 + "," + frame.digital2 + "," + frame.digital3 + "," + frame.digital4 + "," + frame.pulse1 + ",");
@@ -164,7 +174,10 @@ void Sent_Package()
       lastPackage = package;
   }
 
+  return package;
 }
+
+
 
 String Gerador_de_Checksum(String package)
 {
@@ -194,7 +207,6 @@ String Gerador_de_Checksum(String package)
 
 
 /*
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include "analogRead.hpp"
