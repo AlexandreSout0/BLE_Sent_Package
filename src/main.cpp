@@ -14,123 +14,194 @@
    Data:  Setember 2022 
 */
 
+// TCP server at port 80 will respond to HTTP requests
 
 #include <Arduino.h>
-#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <DNSServer.h>
 #include <ESPmDNS.h>
-#include <WiFiClient.h>
-
-const char* ssid     = "4le3x_AP";
-const char* password = "1020304050";
+#include <WiFi.h>
+#include "AsyncTCP.h"
 
 
+#ifndef CONFIG_H
+#define CONFIG_H
 
-// TCP server at port 80 will respond to HTTP requests
-WiFiServer server(80);
+#define SSID "SN-VIRTUAL-OBC"
+#define PASSWORD "152152153"
+
+#define SERVER_HOST_NAME "OBC_SERVER"
+
+#define TCP_SERVER_PORT 9002
+#define DNS_PORT 53
+
+#define READ_INTERVAL     2000
+#define LEDPIN               2
+#define TIMER_INTERVAL 1000000 // 1 SEGUNDO
+
+
+#endif // CONFIG_H
+
+static void sentDataClient_task(void *args);
+
+AsyncClient *conectado;
+
+unsigned int blinkMillis = 0;
+unsigned int readMillis = 0;
+
+
 String lastPackage = "";
-
 String chave = "$POK";
 
 String Gerador_de_Checksum(String package);
-String Sent_Package();
+void Sent_Package();
+
+bool freedom = false;
+int32_t clientes = 0;
+
+static DNSServer DNS;
+
+static void handleData(void *arg, AsyncClient *client, void *data, size_t len)
+{
+	Serial.printf("\n data received from client %s \n", client->remoteIP().toString().c_str()); // Print IP
+	//Serial.write((uint8_t *)data, len); //
+  //Serial.printf(&data);
+
+  //Serial.println( " [" + String((char*)data) + "]" );
+
+
+//strstr
+//strcmp
+//har recebido [] = String((char*)data);
+
+char chave []  = "$POK!";
+char *ponteiro;
+
+// procura pela string str dentro da string palavra
+ponteiro = strstr((char *)data,chave);
+
+// se ponteiro for diferente de null, imprime 3 caracteres (dia)
+if(ponteiro != nullptr)
+{  
+  freedom = true;
+  Serial.printf("\n%c%c%c\n", *ponteiro, *(ponteiro+1), *(ponteiro+2));
+}
+else
+{
+  return;
+}
+
+
+	//our big json string test
+	//String jsonString = "{\"testeteste\":5}";
+	// reply to client
+
+}
+
+static void handleError(void *arg, AsyncClient *client, int8_t error)
+{
+	Serial.printf("\n connection error %s from client %s \n", client->errorToString(error), client->remoteIP().toString().c_str());
+}
+
+static void handleDisconnect(void *arg, AsyncClient *client)
+{
+	Serial.printf("\n client %s disconnected \n", client->remoteIP().toString().c_str());
+  clientes--;
+}
+
+static void handleTimeOut(void *arg, AsyncClient *client, uint32_t time)
+{
+	Serial.printf("\n client ACK timeout ip: %s \n", client->remoteIP().toString().c_str());
+}
+
+static void handleNewClient(void *arg, AsyncClient *client)
+{
+	Serial.printf("\n new client has been connected to server, ip: %s", client->remoteIP().toString().c_str());
+  clientes++;
+  conectado = client;
+	// register events
+	client->onData(&handleData, NULL);
+	client->onError(&handleError, NULL);
+	client->onDisconnect(&handleDisconnect, NULL);
+	client->onTimeout(&handleTimeOut, NULL);
+
+}
 
 
 void setup()
-{   
-    Serial.begin(9600);
-    Serial.println("\n[*] Creating AP");
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(ssid, password);
-    Serial.print("[+] AP Created with IP Gateway ");
-    Serial.println(WiFi.softAPIP());
+{
 
+  xTaskCreatePinnedToCore(sentDataClient_task,"Rx server data",10000,nullptr,3,nullptr,1);
 
-    // Set up mDNS responder:
-    // - first argument is the domain name, in this example
-    //   the fully-qualified domain name is "esp32.local"
-    // - second argument is the IP address to advertise
-    //   we send our IP address on the WiFi network
-    if (!MDNS.begin("esp32")) {
+	Serial.begin(9600);
+  pinMode(LEDPIN,OUTPUT); //Define pino como saida (led azul da devkit)
+
+	// create access point
+	while (!WiFi.softAP(SSID, PASSWORD, 6, false, 15))
+	{
+		delay(500);
+		Serial.print(".");
+	}
+
+    if (!MDNS.begin("OBC_SERVER")) {
         Serial.println("Error setting up MDNS responder!");
         while(1) {
             delay(1000);
         }
     }
-    Serial.println("mDNS responder started");
 
-    // Start TCP (HTTP) server
-    server.begin();
-    Serial.println("TCP server started");
+    MDNS.addService("OBC", "tcp", 9002);
 
-    // Add service to MDNS-SD
-    MDNS.addService("http", "tcp", 80);
+
+	// start dns server
+	if (!DNS.start(DNS_PORT, SERVER_HOST_NAME, WiFi.softAPIP()))
+		Serial.printf("\n failed to start dns service \n");
+
+	AsyncServer *server = new AsyncServer(TCP_SERVER_PORT); // start listening on tcp port 7050
+	server->onClient(&handleNewClient, server);
+	server->begin();
 }
 
 
-void loop(void)
+
+
+void loop()
 {
 
-
-    // Check if a client has connected
-    WiFiClient client = server.available();
-    if (!client) {
-        return;
-    }
-
-    Serial.println("");
-    Serial.println("New client");
-
-    // Wait for data from client to become available
-    while(client.connected() && !client.available()){
-        delay(1);
-    }
-
-    // Read the first line of HTTP request
-    String req = client.readStringUntil('\r');
-
-    // First line of HTTP request looks like "GET /path HTTP/1.1"
-    // Retrieve the "/path" part by finding the spaces
-    int addr_start = req.indexOf(' ');
-    int addr_end = req.indexOf(' ', addr_start + 1);
-    if (addr_start == -1 || addr_end == -1) {
-        Serial.print("Invalid request: ");
-        Serial.println(req);
-        return;
-    }
-
-    req = req.substring(addr_start + 1, addr_end);
-    Serial.print("Request: ");
-    Serial.println(req);
-
-    String s;
-    if (req == "/")
+	  DNS.processNextRequest();
+    
+    if (readMillis == 0 || (millis() - readMillis) >= READ_INTERVAL)
     {
-        IPAddress ip = WiFi.localIP();
-        String ipStr = String(ip[0]) + '.' + String(ip[1]) + '.' + String(ip[2]) + '.' + String(ip[3]);
-
-        //recebe o package
-        //String coisa = "$ALX,600,0,0,0,0,0,5B";
-        String Package;
-        Package = Sent_Package();
-
-        s = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<!DOCTYPE HTML>\r\n" + Package + "\r\n";
-        //s += ipStr;
-        s += "</html>\r\n\r\n";
-        //Serial.println("Sending 200");
+      readMillis = millis();
     }
 
+    if (clientes == 0)
+    {
+      if(blinkMillis == 0 || (millis() - blinkMillis) >= 500)
+      {
+        digitalWrite(LEDPIN, !digitalRead(LEDPIN));
+        blinkMillis = millis();
+      }
+    }
     else
     {
-        s = "HTTP/1.1 404 Not Found\r\n\r\n";
-        Serial.println("Sending 404");
+      digitalWrite(LEDPIN,HIGH);
     }
-    client.print(s);
-
-    client.stop();
-    Serial.println("Done with client");
-
+  
 }
 
+static void sentDataClient_task(void *args){
+    for(;;)
+    { // Loop infinito
+
+      if (freedom == true)
+      {
+        Sent_Package();
+      }
+    vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+    vTaskDelete(nullptr);
+}
 
 struct obc_frame 
 {
@@ -143,7 +214,7 @@ struct obc_frame
 }frame = {1,0,0,0,0,0};
 
 
-String Sent_Package()
+void Sent_Package()
 {
 
   String package;
@@ -174,7 +245,13 @@ String Sent_Package()
       lastPackage = package;
   }
 
-  return package;
+  if (conectado->space() > strlen(package.c_str()) && conectado->canSend())
+  {
+    conectado->add(package.c_str(), strlen(package.c_str()));
+    conectado->send();
+  }
+
+
 }
 
 
@@ -204,6 +281,11 @@ String Gerador_de_Checksum(String package)
                          
   return checksum;  
 }
+
+
+
+
+
 
 
 /*
