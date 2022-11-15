@@ -236,7 +236,7 @@ void Sent_Package()
   String temp_checksum = Gerador_de_Checksum(package);
   
   package = (package + temp_checksum + "\r\n");
-  Serial.print(package);
+  
 
   if (package != lastPackage)
   {
@@ -244,7 +244,7 @@ void Sent_Package()
       //pacote -> notify(); //notifica que houve alterações no pacote
       lastPackage = package;
   }
-
+  Serial.print(package);
   if (conectado->space() > strlen(package.c_str()) && conectado->canSend())
   {
     conectado->add(package.c_str(), strlen(package.c_str()));
