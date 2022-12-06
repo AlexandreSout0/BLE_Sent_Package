@@ -17,6 +17,7 @@
 // TCP server at port 80 will respond to HTTP requests
 
 #include <Arduino.h>
+<<<<<<< HEAD
 #include <AsyncTCP.h>
 #include <DNSServer.h>
 #include <ESPmDNS.h>
@@ -291,6 +292,12 @@ String Gerador_de_Checksum(String package)
 /*
 #include <Arduino.h>
 #include <WiFi.h>
+=======
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLEUtils.h>
+#include <BLE2902.h>
+>>>>>>> parent of 2010edd (Update main.cpp)
 #include "analogRead.hpp"
 
 #define READ_INTERVAL     2000
@@ -340,6 +347,10 @@ analog_read pins(PIN_DIGITAL_1,PIN_DIGITAL_2,PIN_DIGITAL_3,PIN_DIGITAL_4,PIN_RPM
 hw_timer_t * timer = NULL;
 portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 
+BLEServer *server = nullptr; //Ponteiro para uma variável tipo BLEserver
+BLECharacteristic *pacote = nullptr; //Ponteiro para caracteristicas do serviço do periferico
+BLECharacteristic *pacote_rx = nullptr; //Ponteiro para caracteristicas do serviço do periferico
+BLEService *service = nullptr; //Ponteiro para variável tipo BLEService
 
 
 void printteste(std::string teste)
@@ -355,6 +366,62 @@ void testeReset()
   ESP.restart();
 }
 
+//callback  para envendos das características
+class CharacteristicCallbacks: public BLECharacteristicCallbacks 
+{
+    std::string buffer = "";
+
+    void onWrite(BLECharacteristic *pacote_rx) 
+    {
+      //retorna ponteiro para o registrador contendo o valor atual da caracteristica
+      std::string rxValue = pacote_rx->getValue(); 
+      //verifica se existe dados (tamanho maior que zero)
+      buffer += rxValue.c_str();
+      //Serial.print(rxValue.c_str());
+      
+      std::string rxValueCheck = "!";
+      rxValueCheck.c_str();
+      
+      if (rxValue == rxValueCheck)
+      {
+       // Serial.print("passou aqui");
+      }
+
+      printteste(buffer.c_str());
+
+      if(buffer == "$POK!")
+      {
+        Serial.print("passou aqui");
+        flag_retorno = 1;
+        buffer = "";
+      }
+      else
+      {
+        buffer = "";
+      }
+  }
+
+};
+
+
+class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os serviços de callback BLE
+{
+  void onConnect(BLEServer *s)
+  {
+    devicesConnected ++; // quando um usuario se conecta soma mais na variavel
+    BLEDevice::startAdvertising(); // Mesmo que esteja alguém conectado o Advertinsing é chamado novamente e permite conecções com outros dispositivos simultaneos
+    Serial.println("Device Connected");
+  }
+
+  void onDisconnect(BLEServer *s)
+  {
+    devicesConnected--; // quando um usuario se desconecta subtrai um na variavel
+    Serial.println("Device Disconnected");
+    flag_retorno = 0;
+    testeReset();
+    service -> stop();
+  }
+};
 
 void IRAM_ATTR onTimer();
 void sense();
@@ -373,6 +440,37 @@ void setup()
 
   Serial.println("Starting ...");
   pinMode(LEDPIN,OUTPUT); //Define pino como saida (led azul da devkit)
+
+  BLEDevice::init("OBC"); //inicio o dispositivo/Periferico
+  server = BLEDevice::createServer(); //crio um servidor e coloco seu endereço no ponteiro server
+
+  //======= Callback BLE ======= //
+  server -> setCallbacks(new ServerCallbacks()); // cria uma instancia do serviço de callback
+
+  //======= Serviços do Periferico BLE ======= //
+  service = server -> createService(SERVICE_UUID); //crio um serviço com o UUID e guardo seu endereço no ponteiro
+  pacote = service -> createCharacteristic(  //Configurar Características
+    PACOTE_UUID,
+    BLECharacteristic::PROPERTY_READ |    //Habilita a leitura do serviço
+    BLECharacteristic::PROPERTY_NOTIFY   // Habilita a assinatura do serviço para receber alteraçoes de pacote
+  );
+
+  pacote_rx = service -> createCharacteristic(   // Create a BLE Characteristic para recebimento de dados
+                                         RX_UUID,
+                                         BLECharacteristic::PROPERTY_WRITE |
+                                         BLECharacteristic::PROPERTY_READ
+                                       );
+
+  pacote_rx -> setCallbacks(new CharacteristicCallbacks());
+  service -> start(); // inicia o serviço
+
+  // ======= Criação do Advertising para poder ser descoberto ======= //
+  BLEAdvertising *advertising = nullptr; // Ponteiro para váriavel tipo BLEAdvertising
+  advertising = BLEDevice::getAdvertising(); // Crio um advertising e coloco seu endereço no ponteiro advertising
+  advertising -> addServiceUUID(SERVICE_UUID);
+  advertising -> setScanResponse(false); //Configurações de Advertising
+  advertising -> setMinPreferred(0x06); //Configurações de Advertising
+  BLEDevice::startAdvertising(); //inicia o Advertising
 
 }
 
@@ -444,8 +542,8 @@ void Sent_Package()
 
   if (package != lastPackage)
   {
-      //pacote -> setValue(package.c_str());
-      //pacote -> notify(); //notifica que houve alterações no pacote
+      pacote -> setValue(package.c_str());
+      pacote -> notify(); //notifica que houve alterações no pacote
       lastPackage = package;
   }
 
