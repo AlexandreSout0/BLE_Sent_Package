@@ -19,7 +19,15 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <BLEAdvertisedDevice.h>
+#include "esp_gap_ble_api.h"
 #include "analogRead.hpp"
+#include <BLEAddress.h>
+#include <string>
+#include <sstream>
+#include <iomanip>
+#include <string.h>
+#include <stdio.h>
 
 #define READ_INTERVAL     2000
 #define LEDPIN               2
@@ -95,7 +103,7 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
     void onWrite(BLECharacteristic *pacote_rx) 
     {
       //retorna ponteiro para o registrador contendo o valor atual da caracteristica
-      std::string rxValue = pacote_rx->getValue(); 
+      std::string rxValue = pacote_rx -> getValue(); 
       //verifica se existe dados (tamanho maior que zero)
       buffer += rxValue.c_str();
       //Serial.print(rxValue.c_str());
@@ -110,7 +118,7 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
 
       printteste(buffer.c_str());
 
-      if(buffer == "$POK!")
+      if(buffer != "$POK!")
       {
         Serial.print("passou aqui");
         flag_retorno = 1;
@@ -127,21 +135,55 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
 
 class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os serviços de callback BLE
 {
-  void onConnect(BLEServer *s)
+  void onConnect(BLEServer *s, esp_ble_gatts_cb_param_t *param)
   {
     devicesConnected ++; // quando um usuario se conecta soma mais na variavel
     BLEDevice::startAdvertising(); // Mesmo que esteja alguém conectado o Advertinsing é chamado novamente e permite conecções com outros dispositivos simultaneos
     Serial.println("Device Connected");
+   // String address = cliente.getAddress();
+		char remoteAddress[18];
+
+		sprintf(
+			remoteAddress,
+			"%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
+			param->connect.remote_bda[0],
+			param->connect.remote_bda[1],
+			param->connect.remote_bda[2],
+			param->connect.remote_bda[3],
+			param->connect.remote_bda[4],
+			param->connect.remote_bda[5]
+		);
+
+		//ESP_LOGI(LOG_TAG, "myServerCallback onConnect, MAC: %s", remoteAddress);
+    Serial.printf(remoteAddress);
   }
 
-  void onDisconnect(BLEServer *s)
+
+  void onDisconnect(BLEServer *s, esp_ble_gatts_cb_param_t *param)
   {
     devicesConnected--; // quando um usuario se desconecta subtrai um na variavel
     Serial.println("Device Disconnected");
     flag_retorno = 0;
     testeReset();
+    char remoteAddress[20];
+
+		sprintf(
+			remoteAddress,
+			"%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
+			param->disconnect.remote_bda[0],
+			param->disconnect.remote_bda[1],
+			param->disconnect.remote_bda[2],
+			param->disconnect.remote_bda[3],
+			param->disconnect.remote_bda[4],
+			param->disconnect.remote_bda[5]
+		);
+
+    Serial.printf(remoteAddress);
+    flag_retorno = 0;
+    testeReset();
     service -> stop();
   }
+
 };
 
 void IRAM_ATTR onTimer();
@@ -170,17 +212,11 @@ void setup()
 
   //======= Serviços do Periferico BLE ======= //
   service = server -> createService(SERVICE_UUID); //crio um serviço com o UUID e guardo seu endereço no ponteiro
-  pacote = service -> createCharacteristic(  //Configurar Características
-    PACOTE_UUID,
-    BLECharacteristic::PROPERTY_READ |    //Habilita a leitura do serviço
-    BLECharacteristic::PROPERTY_NOTIFY   // Habilita a assinatura do serviço para receber alteraçoes de pacote
-  );
+  pacote = service -> createCharacteristic( PACOTE_UUID, BLECharacteristic::PROPERTY_READ |BLECharacteristic::PROPERTY_NOTIFY); // Habilita a assinatura do serviço para receber alteraçoes de pacote //Configurar Características
+  pacote_rx = service -> createCharacteristic( RX_UUID, BLECharacteristic::PROPERTY_WRITE ); // Create a BLE Characteristic para recebimento de dados
+  pacote->addDescriptor(new BLE2902());
 
-  pacote_rx = service -> createCharacteristic(   // Create a BLE Characteristic para recebimento de dados
-                                         RX_UUID,
-                                         BLECharacteristic::PROPERTY_WRITE |
-                                         BLECharacteristic::PROPERTY_READ
-                                       );
+
 
   pacote_rx -> setCallbacks(new CharacteristicCallbacks());
   service -> start(); // inicia o serviço
@@ -233,20 +269,20 @@ void Sent_Package()
 {
   String package;
 
-   frame.digital1 =  pins.analog_digital(PIN_DIGITAL_1);
-   frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
-   frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
-   frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
-   frame.rpm      = random(1000);// pins.analog_rpm(PIN_RPM);
-   frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+  //  frame.digital1 =  pins.analog_digital(PIN_DIGITAL_1);
+  //  frame.digital2 =  pins.analog_digital(PIN_DIGITAL_2);
+  //  frame.digital3 =  pins.analog_digital(PIN_DIGITAL_3);
+  //  frame.digital4 =  pins.analog_digital(PIN_DIGITAL_4);
+  //  frame.rpm      = random(1000);// pins.analog_rpm(PIN_RPM);
+  //  frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
 
     
-  // frame.digital1 =  random(2);
-  // frame.digital2 =  random(2);
-  // frame.digital3 =  random(2);
-  // frame.digital4 =  random(2);
-  // frame.rpm      =  random(1000);
-  //  frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
+  frame.digital1 =  random(2);
+  frame.digital2 =  random(2);
+  frame.digital3 =  random(2);
+  frame.digital4 =  random(2);
+  frame.rpm      =  random(1000);
+  frame.pulse1   =  pins.analog_pulse(PIN_PULSE_1);
   
  
   package = "$ALX,";
@@ -264,7 +300,7 @@ void Sent_Package()
   if (package != lastPackage)
   {
       pacote -> setValue(package.c_str());
-      pacote -> notify(); //notifica que houve alterações no pacote
+      pacote -> notify(true); //notifica que houve alterações no pacote
       lastPackage = package;
   }
 
@@ -306,9 +342,8 @@ void loop()
   {
     digitalWrite(LEDPIN,HIGH);
   }
-
+  
 
 }
-
 
 
