@@ -56,6 +56,8 @@ unsigned int readMillis = 0;
 
 int flag_retorno = 0;
 
+char clientAddress[18];
+
 volatile int interruptCounter;
 int totalInterruptCounter;
 
@@ -102,6 +104,9 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
 
     void onWrite(BLECharacteristic *pacote_rx) 
     {
+      Serial.println((char *) pacote_rx -> getData());
+
+
       //retorna ponteiro para o registrador contendo o valor atual da caracteristica
       std::string rxValue = pacote_rx -> getValue(); 
       //verifica se existe dados (tamanho maior que zero)
@@ -116,6 +121,7 @@ class CharacteristicCallbacks: public BLECharacteristicCallbacks
        // Serial.print("passou aqui");
       }
 
+      printteste(" : ");
       printteste(buffer.c_str());
 
       if(buffer != "$POK!")
@@ -140,11 +146,10 @@ class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os servi�
     devicesConnected ++; // quando um usuario se conecta soma mais na variavel
     BLEDevice::startAdvertising(); // Mesmo que esteja alguém conectado o Advertinsing é chamado novamente e permite conecções com outros dispositivos simultaneos
     Serial.println("Device Connected");
-   // String address = cliente.getAddress();
-		char remoteAddress[18];
+		char clientAddress[18];
 
 		sprintf(
-			remoteAddress,
+			clientAddress,
 			"%.2X:%.2X:%.2X:%.2X:%.2X:%.2X",
 			param->connect.remote_bda[0],
 			param->connect.remote_bda[1],
@@ -154,8 +159,7 @@ class ServerCallbacks: public BLEServerCallbacks // Classe para herdar os servi�
 			param->connect.remote_bda[5]
 		);
 
-		//ESP_LOGI(LOG_TAG, "myServerCallback onConnect, MAC: %s", remoteAddress);
-    Serial.printf(remoteAddress);
+    Serial.printf(clientAddress);
   }
 
 
@@ -212,8 +216,8 @@ void setup()
 
   //======= Serviços do Periferico BLE ======= //
   service = server -> createService(SERVICE_UUID); //crio um serviço com o UUID e guardo seu endereço no ponteiro
-  pacote = service -> createCharacteristic( PACOTE_UUID, BLECharacteristic::PROPERTY_READ |BLECharacteristic::PROPERTY_NOTIFY); // Habilita a assinatura do serviço para receber alteraçoes de pacote //Configurar Características
-  pacote_rx = service -> createCharacteristic( RX_UUID, BLECharacteristic::PROPERTY_WRITE ); // Create a BLE Characteristic para recebimento de dados
+  pacote = service -> createCharacteristic( PACOTE_UUID, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY); // Habilita a assinatura do serviço para receber alteraçoes de pacote //Configurar Características
+  pacote_rx = service -> createCharacteristic( RX_UUID, BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_READ ); // Create a BLE Characteristic para recebimento de dados
   pacote->addDescriptor(new BLE2902());
 
 
@@ -302,6 +306,9 @@ void Sent_Package()
       pacote -> setValue(package.c_str());
       pacote -> notify(true); //notifica que houve alterações no pacote
       lastPackage = package;
+
+      //pacote->notify(specificAddress);
+
   }
 
 }
